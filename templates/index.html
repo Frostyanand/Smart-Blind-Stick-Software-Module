@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Smart Blind Stick — Live Detection</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>🦯 Smart Blind Stick — Live Detection</h1>
+
+    <!-- TTS Mode Display -->
+    <div class="tts-mode-banner">
+      <span class="label">TTS Mode:</span>
+      <span class="mode">{{ tts_mode }}</span>
+      {% if tts_mode == 'CUSTOM' %}
+        <span class="classes">Classes: {{ custom_classes }}</span>
+      {% else %}
+        <span class="classes">Announcing ALL detected objects</span>
+      {% endif %}
+      <span class="hint">(Configure in .env file)</span>
+    </div>
+
+    <!-- Source Selection Tabs -->
+    <div class="source-tabs">
+      <button id="cameraTabBtn" class="tab-btn active" onclick="switchToCamera()">📹 Camera</button>
+      <button id="videoTabBtn" class="tab-btn" onclick="switchToVideo()">🎬 Video File</button>
+    </div>
+
+    <!-- Camera Controls -->
+    <div id="cameraControls" class="controls">
+      <label for="cameraSelect">Choose camera:</label>
+      <select id="cameraSelect"></select>
+      <button id="setCamBtn">Set Camera</button>
+      <span id="camStatus" class="status"></span>
+    </div>
+
+    <!-- Video Upload Controls -->
+    <div id="videoControls" class="controls" style="display: none;">
+      <label for="videoFile">Upload video file:</label>
+      <input type="file" id="videoFile" accept="video/*" />
+      <button id="uploadBtn">Upload & Play</button>
+      <span id="videoStatus" class="status"></span>
+    </div>
+
+    <!-- Video Feed -->
+    <div class="viewer">
+      <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Live feed">
+    </div>
+
+    <!-- Info Panel -->
+    <div class="info">
+      <div class="info-row">
+        <span class="info-label">Confidence threshold:</span>
+        <span class="info-value" id="confText">Loading...</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Inference interval:</span>
+        <span class="info-value" id="infText">Loading...</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">TTS Cooldown:</span>
+        <span class="info-value" id="cooldownText">Loading...</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Status:</span>
+        <span class="info-value status-indicator" id="statusText">Ready</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+let currentMode = 'camera';
+
+// Load configuration from backend
+async function loadConfig() {
+  try {
+    let res = await fetch('/config');
+    let data = await res.json();
+    document.getElementById('confText').textContent = data.conf_threshold;
+    document.getElementById('infText').textContent = data.inference_interval + ' s';
+    document.getElementById('cooldownText').textContent = data.cooldown + ' s';
+  } catch (e) {
+    console.error('Failed to load config', e);
+    document.getElementById('confText').textContent = '0.45';
+    document.getElementById('infText').textContent = '1.0 s';
+    document.getElementById('cooldownText').textContent = '3.0 s';
+  }
+}
+
+// Load available cameras
+async function loadCameras() {
+  try {
+    let res = await fetch('/cameras');
+    let data = await res.json();
+    const sel = document.getElementById('cameraSelect');
+    sel.innerHTML = '';
+    data.cameras.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.text = 'Camera ' + i;
+      sel.appendChild(opt);
+    });
+    if (data.cameras.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = -1;
+      opt.text = 'No cameras found';
+      sel.appendChild(opt);
+    } else {
+      sel.value = data.default || data.cameras[0];
+    }
+  } catch (e) {
+    console.error('Failed to load cameras', e);
+  }
+}
+
+// Switch to camera mode
+function switchToCamera() {
+  currentMode = 'camera';
+  document.getElementById('cameraTabBtn').classList.add('active');
+  document.getElementById('videoTabBtn').classList.remove('active');
+  document.getElementById('cameraControls').style.display = 'flex';
+  document.getElementById('videoControls').style.display = 'none';
+}
+
+// Switch to video mode
+function switchToVideo() {
+  currentMode = 'video';
+  document.getElementById('videoTabBtn').classList.add('active');
+  document.getElementById('cameraTabBtn').classList.remove('active');
+  document.getElementById('videoControls').style.display = 'flex';
+  document.getElementById('cameraControls').style.display = 'none';
+}
+
+// Set camera
+document.getElementById('setCamBtn').addEventListener('click', async () => {
+  const sel = document.getElementById('cameraSelect');
+  const idx = parseInt(sel.value);
+  const status = document.getElementById('camStatus');
+  status.textContent = 'Setting...';
+  status.className = 'status';
+  
+  try {
+    let res = await fetch('/set_camera/' + idx, { method: 'POST' });
+    if (res.ok) {
+      status.textContent = '✓ Camera ' + idx + ' active';
+      status.className = 'status success';
+      
+      // Tell backend to use camera
+      await fetch('/use_camera', { method: 'POST' });
+      
+      // Reload video feed
+      const img = document.getElementById('videoFeed');
+      img.src = '/video_feed?ts=' + Date.now();
+      
+      document.getElementById('statusText').textContent = 'Camera ' + idx + ' streaming';
+    } else {
+      let err = await res.json();
+      status.textContent = '✗ Error: ' + (err.error || 'failed');
+      status.className = 'status error';
+    }
+  } catch (e) {
+    status.textContent = '✗ Error setting camera';
+    status.className = 'status error';
+    console.error(e);
+  }
+});
+
+// Upload video
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('videoFile');
+  const status = document.getElementById('videoStatus');
+  
+  if (!fileInput.files || fileInput.files.length === 0) {
+    status.textContent = '✗ Please select a video file';
+    status.className = 'status error';
+    return;
+  }
+  
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append('video', file);
+  
+  status.textContent = 'Uploading ' + file.name + '...';
+  status.className = 'status';
+  
+  try {
+    let res = await fetch('/upload_video', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (res.ok) {
+      let data = await res.json();
+      status.textContent = '✓ Playing: ' + data.filename;
+      status.className = 'status success';
+      
+      // Reload video feed
+      const img = document.getElementById('videoFeed');
+      img.src = '/video_feed?ts=' + Date.now();
+      
+      document.getElementById('statusText').textContent = 'Playing: ' + data.filename;
+    } else {
+      let err = await res.json();
+      status.textContent = '✗ Error: ' + (err.error || 'upload failed');
+      status.className = 'status error';
+    }
+  } catch (e) {
+    status.textContent = '✗ Upload failed: ' + e.message;
+    status.className = 'status error';
+    console.error(e);
+  }
+});
+
+// Initialize on load
+window.addEventListener('load', () => {
+  loadCameras();
+  loadConfig();
+  document.getElementById('statusText').textContent = 'Initializing...';
+  
+  // Check if video feed loaded
+  setTimeout(() => {
+    document.getElementById('statusText').textContent = 'Streaming active';
+  }, 2000);
+});
+</script>
+</body>
+</html>

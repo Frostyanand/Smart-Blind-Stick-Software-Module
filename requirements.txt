@@ -1,0 +1,25 @@
+# Smart Blind Stick - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Deep Learning & Computer Vision
+ultralytics>=8.3.0        # YOLOv11 object detection
+opencv-python>=4.8.0      # Computer vision library
+torch>=2.0.0              # PyTorch (required by ultralytics)
+torchvision>=0.15.0       # Vision utilities for PyTorch
+
+# Web Framework
+flask>=2.3.0              # Web server
+werkzeug>=2.3.0           # WSGI utilities
+
+# Text-to-Speech
+pyttsx3>=2.90             # Offline TTS engine
+pywin32>=305              # Windows COM support (required by pyttsx3 on Windows)
+comtypes>=1.4.0           # COM interface support
+
+# Configuration
+python-dotenv>=1.0.0      # .env file loader
+
+# Data Processing
+numpy>=1.24.0             # Numerical computing
+pillow>=10.0.0            # Image processing
+
