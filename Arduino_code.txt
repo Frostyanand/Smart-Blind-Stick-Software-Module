@@ -1,0 +1,46 @@
+// Pin Definitions
+const int trigPin = 10;  // Trigger pin of ultrasonic sensor connected to D9
+const int echoPin = 11; // Echo pin of ultrasonic sensor connected to D10
+const int buzzer = 12; // Buzzer connected to D7
+
+// Distance threshold (in cm)
+const int distanceThreshold = 30;
+
+void setup() {
+  pinMode(trigPin, OUTPUT);  // Set trigger pin as output
+  pinMode(echoPin, INPUT);   // Set echo pin as input
+  pinMode(buzzer, OUTPUT); // Set buzzer pin as output
+  Serial.begin(9600);        // Initialize serial communication for debugging
+}
+
+void loop() {
+  long duration, distance;
+  
+  // Send a 10us pulse to trigger pin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Measure the duration for which echo pin is high
+  duration = pulseIn(echoPin, HIGH);
+
+  // Calculate the distance in cm
+  distance = duration * 0.034 / 2;
+  
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  // If distance is below threshold, turn on the buzzer
+  if (distance < distanceThreshold) {
+    digitalWrite(buzzer, HIGH);  // Activate buzzer
+    Serial.println("Object detected! Buzzer ON.");
+  } else {
+    digitalWrite(buzzer, LOW);   // Deactivate buzzer
+    Serial.println("No object in range. Buzzer OFF.");
+  }
+
+  // delay(500);  // Delay for stability
+}
